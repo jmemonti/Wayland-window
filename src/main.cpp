@@ -61,27 +61,6 @@ static void registry_listener_global_remove(void *data, struct wl_registry *regi
     printf("Got a registry losing event for %d\n", id);
 }
 
-//Configure para evitar problemas con la ventana
-static void handle_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial)
-{
-    // Necesario para que el compositor "active" la ventana
-    xdg_surface_ack_configure(xdg_surface, serial);
-
-    struct WindowData *win = (struct WindowData *)data;
-
-    // Aquí recreas el buffer y lo adjuntas con el tamaño correcto
-    struct wl_buffer *buffer = create_buffer(win->shm, WIDTH, HEIGHT); // asegúrate de tener el tamaño que quieres
-
-    wl_surface_attach(win->surface, buffer, 0, 0);
-    wl_surface_damage(win->surface, 0, 0, WIDTH, HEIGHT);
-    wl_surface_commit(win->surface);
-}
-
-//Surface listener para aniadir el configure
-static const struct xdg_surface_listener xdg_surface_listener = {
-    .configure = handle_configure
-};
-
 //Crear el fichero de memoria compartida
 int create_shm_file(size_t size) 
 {
@@ -95,7 +74,6 @@ int create_shm_file(size_t size)
     }
     return fd;
 }
-
 
 //Crear buffer de memoria compartida
 struct wl_buffer* create_buffer (struct wl_shm *shm, uint32_t width, uint32_t height)
@@ -126,6 +104,26 @@ struct wl_buffer* create_buffer (struct wl_shm *shm, uint32_t width, uint32_t he
     return buffer;
 }
 
+//Configure para evitar problemas con la ventana
+static void handle_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial)
+{
+    // Necesario para que el compositor "active" la ventana
+    xdg_surface_ack_configure(xdg_surface, serial);
+
+    struct WindowData *win = (struct WindowData *)data;
+
+    // Aquí recreas el buffer y lo adjuntas con el tamaño correcto
+    struct wl_buffer *buffer = create_buffer(win->shm, WIDTH, HEIGHT); // asegúrate de tener el tamaño que quieres
+
+    wl_surface_attach(win->surface, buffer, 0, 0);
+    wl_surface_damage(win->surface, 0, 0, WIDTH, HEIGHT);
+    wl_surface_commit(win->surface);
+}
+
+//Surface listener para aniadir el configure
+static const struct xdg_surface_listener xdg_surface_listener = {
+    .configure = handle_configure
+};
 
 int main (int argc, char *argv[])
 {
@@ -165,10 +163,10 @@ int main (int argc, char *argv[])
     wl_surface *surface = wl_compositor_create_surface(datos.compositor);
     struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(datos.xdg, surface);
 
-    struct WindowData {
-        struct wl_shm *shm;
-        struct wl_surface *surface;
-    };
+    struct WindowData window_data;
+        window_data.surface = surface;
+        window_data.shm = datos.shm;
+    
 
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, &window_data); //para evitar que el compositor redibuje mal la surface o ajuste mal el tamanio
 
