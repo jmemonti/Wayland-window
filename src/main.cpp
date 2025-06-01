@@ -162,17 +162,15 @@ int main (int argc, char *argv[])
     // Crear surface
     wl_surface *surface = wl_compositor_create_surface(datos.compositor);
     struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(datos.xdg, surface);
+    struct xdg_toplevel *toplevel = xdg_surface_get_toplevel(xdg_surface); // Crear xdg_toplevel para que xdg_surface sea una ventana
 
+    //Crear struct para guardar los datos de la ventana
     struct WindowData window_data;
-        window_data.surface = surface;
-        window_data.shm = datos.shm;
+    window_data.surface = surface;
+    window_data.shm = datos.shm;
     
-
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, &window_data); //para evitar que el compositor redibuje mal la surface o ajuste mal el tamanio
 
-    // Crear xdg_toplevel para que xdg_surface sea una ventana
-    struct xdg_toplevel *toplevel = xdg_surface_get_toplevel(xdg_surface);
-    
     //Titulo de la ventana
     xdg_toplevel_set_title(toplevel, "window");
     
