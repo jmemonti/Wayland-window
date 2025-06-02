@@ -121,6 +121,7 @@ static void handle_configure(void *data, struct xdg_surface *xdg_surface, uint32
 
     wl_surface_attach(win->surface, buffer, 0, 0);
     wl_surface_damage(win->surface, 0, 0, win->width, win->height);
+
     wl_surface_commit(win->surface);
 }
 
@@ -221,16 +222,12 @@ int main (int argc, char *argv[])
     window_data.running = true;
     
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, &window_data); //para evitar que el compositor redibuje mal la surface o ajuste mal el tamanio
-    xdg_toplevel_set_title(toplevel, "window-test"); //Titulo de la ventana
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, &window_data);
 
-    //Crear buffer
-    struct wl_buffer *buffer = create_buffer(datos.shm, window_data.width, window_data.height);
-    wl_surface_attach(surface, buffer, 0, 0);
-    wl_surface_damage(surface, 0, 0, window_data.width, window_data.height);
-
-    //Mostrar ventana
-    wl_surface_commit(surface);
+    xdg_toplevel_set_title(toplevel, "window-test"); //Titulo de la ventana
+    
+    wl_surface_commit(surface); //Mostrar ventana
+    wl_display_roundtrip(display);
 
     //Event Loop(paso de mensajes)
     while (wl_display_dispatch(display) != -1 && window_data.running) // wl_display_dispatch -> se envian las peticiones desde el cliente al servidor 
