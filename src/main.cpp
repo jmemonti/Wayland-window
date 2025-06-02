@@ -15,6 +15,7 @@
 // Formato de píxel
 #define BYTES_PER_PIXEL 4 // ARGB8888
 
+
 //Estructura de datos para almacenar recursos(protocolos)
 struct Datos {
     struct xdg_wm_base *xdg;
@@ -22,10 +23,13 @@ struct Datos {
     struct wl_shm *shm; // necesario para crear un buffer de memoria compartida y mostrar algo en la surface
 };
 
-//Para usarlo en el confii 
+//Para usarlo en el configure de la ventana
 struct WindowData {
     struct wl_shm *shm;
     struct wl_surface *surface;
+    int32_t width;
+    int32_t height;
+    bool running;
 };
 
 
@@ -35,7 +39,7 @@ static void registry_listener_global(void *data, struct wl_registry *registry, u
     //Obtener la struct de datos
     struct Datos *datos = (struct Datos*) data; //cast a data para que pase de void* a Datos*
 
-    printf("Got a registry event for %s id %d\n", interface, id);
+    //printf("Got a registry event for %s id %d\n", interface, id);
 
     //buscar recurso "xdg_wm_base" 
     if (!strcmp(interface, "xdg_wm_base")) {
@@ -87,7 +91,7 @@ struct wl_buffer* create_buffer (struct wl_shm *shm, uint32_t width, uint32_t he
     //Mapear el fichero de memoria compartida
     void *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-    //TODO: Llenar la memoria con negro (ARGB: 0XFF000000)
+    //Llenar la memoria con negro (ARGB: 0XFF000000)
     uint32_t *pixels = (uint32_t *)data;
 
     for (size_t i = 0; i < (size / 4); ++i) {
@@ -95,7 +99,7 @@ struct wl_buffer* create_buffer (struct wl_shm *shm, uint32_t width, uint32_t he
     }
 
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, WIDTH, HEIGHT, stride, WL_SHM_FORMAT_ARGB8888);
+    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
 
     //delete
     wl_shm_pool_destroy(pool);
@@ -113,16 +117,60 @@ static void handle_configure(void *data, struct xdg_surface *xdg_surface, uint32
     struct WindowData *win = (struct WindowData *)data;
 
     // Aquí recreas el buffer y lo adjuntas con el tamaño correcto
-    struct wl_buffer *buffer = create_buffer(win->shm, WIDTH, HEIGHT); // asegúrate de tener el tamaño que quieres
+    struct wl_buffer *buffer = create_buffer(win->shm, win->width, win->height); // asegúrate de tener el tamaño que quieres
 
     wl_surface_attach(win->surface, buffer, 0, 0);
-    wl_surface_damage(win->surface, 0, 0, WIDTH, HEIGHT);
+    wl_surface_damage(win->surface, 0, 0, win->width, win->height);
     wl_surface_commit(win->surface);
 }
 
 //Surface listener para aniadir el configure
 static const struct xdg_surface_listener xdg_surface_listener = {
     .configure = handle_configure
+};
+
+//Toplevel listener para evitar problemas con la ventana
+static void toplevel_handle_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states) 
+{
+    struct WindowData *win = static_cast<WindowData *>(data);
+
+    if (win->width != width || win->height != height)
+    {
+        win->width = width;
+        win->height = height;
+    }
+}
+
+static void toplevel_handle_close(void *data, struct xdg_toplevel *xdg_toplevel) 
+{
+    struct WindowData *win = static_cast<WindowData *>(data);
+
+    win->running = false; //cerrar ventana
+}
+
+static void toplevel_handle_configure_bounds(void *data,
+    struct xdg_toplevel *xdg_toplevel,
+    int32_t width, int32_t height)
+{
+    // puedes ignorar este evento si no lo necesitas
+    (void)data; (void)xdg_toplevel; (void)width; (void)height;
+}
+
+static void toplevel_handle_wm_capabilities(void *data,
+    struct xdg_toplevel *xdg_toplevel,
+    struct wl_array *capabilities)
+{
+    // puedes ignorar este evento si no lo necesitas
+    (void)data; (void)xdg_toplevel; (void)capabilities;
+}
+
+static const struct xdg_toplevel_listener toplevel_listener = {
+    toplevel_handle_configure,
+    toplevel_handle_close,
+
+    //aunque no se utilicen estas dos funciones se deben declarar, no se pueden dejar a NULL
+    toplevel_handle_configure_bounds,
+    toplevel_handle_wm_capabilities
 };
 
 int main (int argc, char *argv[])
@@ -154,8 +202,8 @@ int main (int argc, char *argv[])
     wl_display_roundtrip(display);// se bloquea hasta que se procesen los eventos(pasos de mensajes del servidor al cliente)
 
     //Comprobar que todos las recursos que se requieren estan disponibles
-    if (datos.xdg == NULL || datos.compositor == NULL) {
-        fprintf(stderr, "No wl_compositor or xdg_wm_base support\n"); 
+    if (datos.xdg == NULL || datos.compositor == NULL || datos.shm == NULL) {
+        fprintf(stderr, "No wl_compositor, wl_shm or xdg_wm_base support\n"); 
         return 1;
     }
 
@@ -168,25 +216,34 @@ int main (int argc, char *argv[])
     struct WindowData window_data;
     window_data.surface = surface;
     window_data.shm = datos.shm;
+    window_data.width = WIDTH;
+    window_data.height = HEIGHT;
+    window_data.running = true;
     
     xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, &window_data); //para evitar que el compositor redibuje mal la surface o ajuste mal el tamanio
+    xdg_toplevel_set_title(toplevel, "window-test"); //Titulo de la ventana
+    xdg_toplevel_add_listener(toplevel, &toplevel_listener, &window_data);
 
-    //Titulo de la ventana
-    xdg_toplevel_set_title(toplevel, "window");
-    
     //Crear buffer
-    struct wl_buffer *buffer = create_buffer(datos.shm, WIDTH, HEIGHT);
+    struct wl_buffer *buffer = create_buffer(datos.shm, window_data.width, window_data.height);
     wl_surface_attach(surface, buffer, 0, 0);
-    wl_surface_damage(surface, 0, 0, WIDTH, HEIGHT);
+    wl_surface_damage(surface, 0, 0, window_data.width, window_data.height);
 
     //Mostrar ventana
     wl_surface_commit(surface);
 
     //Event Loop(paso de mensajes)
-    while (wl_display_dispatch(display) != -1) { // wl_display_dispatch -> se envian las peticiones desde el cliente al servidor
-    }
+    while (wl_display_dispatch(display) != -1 && window_data.running) // wl_display_dispatch -> se envian las peticiones desde el cliente al servidor 
+    { 
 
+    }
+    
+    //Eliminar 
+    xdg_toplevel_destroy(toplevel);
+    xdg_surface_destroy(xdg_surface);
+    wl_surface_destroy(surface);
     wl_display_disconnect(display);
+
     printf("Disconected from display\n");
 
     return 0;
