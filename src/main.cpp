@@ -104,6 +104,7 @@ struct wl_buffer* create_buffer (struct wl_shm *shm, uint32_t width, uint32_t he
     //delete
     wl_shm_pool_destroy(pool);
     close(fd); // el fd ya no es necesario después del create_buffer
+    munmap(data, size);
 
     return buffer;
 }
@@ -111,16 +112,15 @@ struct wl_buffer* create_buffer (struct wl_shm *shm, uint32_t width, uint32_t he
 //Configure para evitar problemas con la ventana
 static void handle_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial)
 {
+    struct WindowData *win = (struct WindowData *)data;
+
     // Necesario para que el compositor "active" la ventana
     xdg_surface_ack_configure(xdg_surface, serial);
-
-    struct WindowData *win = (struct WindowData *)data;
 
     // Aquí recreas el buffer y lo adjuntas con el tamaño correcto
     struct wl_buffer *buffer = create_buffer(win->shm, win->width, win->height); // asegúrate de tener el tamaño que quieres
 
     wl_surface_attach(win->surface, buffer, 0, 0);
-    wl_surface_damage(win->surface, 0, 0, win->width, win->height);
 
     wl_surface_commit(win->surface);
 }
@@ -227,7 +227,6 @@ int main (int argc, char *argv[])
     xdg_toplevel_set_title(toplevel, "window-test"); //Titulo de la ventana
     
     wl_surface_commit(surface); //Mostrar ventana
-    wl_display_roundtrip(display);
 
     //Event Loop(paso de mensajes)
     while (wl_display_dispatch(display) != -1 && window_data.running) // wl_display_dispatch -> se envian las peticiones desde el cliente al servidor 
