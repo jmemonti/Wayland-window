@@ -6,8 +6,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-//Para compilar: gcc main.cpp xdg-shell-protocol.c -lwayland-client -o window
-
 //Tamanio de la ventana
 #define  WIDTH 300
 #define HEIGHT 200
@@ -47,8 +45,6 @@ static void registry_listener_global(void *data, struct wl_registry *registry, u
 {
     //Obtener la struct de datos
     struct Datos *datos = (struct Datos*) data; //cast a data para que pase de void* a Datos*
-
-    //printf("Got a registry event for %s id %d\n", interface, id);
 
     //buscar recurso "xdg_wm_base" 
     if (!strcmp(interface, "xdg_wm_base")) {
