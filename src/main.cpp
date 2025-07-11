@@ -32,6 +32,15 @@ struct WindowData {
     bool running;
 };
 
+void xdg_ping(void *data, struct xdg_wm_base *xdg, uint32_t serial)
+{
+    xdg_wm_base_pong(xdg, serial);
+}
+
+const struct xdg_wm_base_listener xdg_listener 
+{
+    .ping = xdg_ping,
+};
 
 //funciones para el listener
 static void registry_listener_global(void *data, struct wl_registry *registry, uint32_t id, const char *interface, uint32_t version)
@@ -45,6 +54,7 @@ static void registry_listener_global(void *data, struct wl_registry *registry, u
     if (!strcmp(interface, "xdg_wm_base")) {
         //solicitar objeto xdg_wm_base 
         datos->xdg = (struct xdg_wm_base*) wl_registry_bind(registry, id, &xdg_wm_base_interface, version); //cast porque wl_registry_bind devuelve void*
+        xdg_wm_base_add_listener(datos->xdg, &xdg_listener, NULL);
     }
 
     //buscar el recurso "wl_compositor"
@@ -225,6 +235,7 @@ int main (int argc, char *argv[])
     xdg_toplevel_add_listener(toplevel, &toplevel_listener, &window_data);
 
     xdg_toplevel_set_title(toplevel, "window-test"); //Titulo de la ventana
+    xdg_toplevel_set_app_id(toplevel, "window-test");
     
     wl_surface_commit(surface); //Mostrar ventana
 
